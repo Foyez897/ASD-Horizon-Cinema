@@ -1,123 +1,245 @@
-import datetime
-import random
-import string
-from utils.db_connection import execute_query
-
-def generate_booking_reference():
-    """Generate a truly unique booking reference by checking existing records before returning."""
-    # Create a temporary table to store used references if it doesn't exist
-    execute_query("CREATE TABLE IF NOT EXISTS temp_booking_references (reference TEXT UNIQUE NOT NULL);", commit=True)
-
-    while True:
-        # Generate a random 8-character reference
-        reference = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-
-        try:
-            # Try inserting the reference into the temporary table
-            execute_query("INSERT INTO temp_booking_references (reference) VALUES (?);", (reference,), commit=True)
-
-            # If successful, return the unique reference
-            return reference
-
-        except Exception as e:
-            if "UNIQUE constraint failed" in str(e):  # If the reference already exists, retry
-                continue
-            else:
-                print(f"❌ Database Error: {e}")
-                return None  # Return None if a database issue occurs
-def check_seat_availability(showtime_id, num_tickets, seat_type):
-    query = """
-    SELECT COUNT(*) FROM seats 
-    WHERE showtime_id = ? AND seat_type = ? AND is_booked = 0;
-    """
-    result = execute_query(query, (showtime_id, seat_type), fetch_one=True)
-    
-    seat_count = result[0] if isinstance(result, tuple) else result
-    print(f"🔍 Checking seat availability: ShowTime {showtime_id}, Type {seat_type}, Found Seats: {seat_count}, Needed: {num_tickets}")
-
-    return seat_count >= num_tickets
+import os
+import sqlite3
+import uuid
+from datetime import datetime, timedelta
+from database.database_setup import get_db_connection
 
 
-def book_tickets(booking_staff_id, customer_name, customer_phone, customer_email, showtime_id, num_tickets, seat_type):
-    """Book a specified number of tickets if seats are available."""
-    if not check_seat_availability(showtime_id, num_tickets, seat_type):
-        return "❌ Not enough seats available!"
-
-    try:
-        query = """
-        SELECT id, price FROM seats 
-        WHERE showtime_id = ? AND seat_type = ? AND is_booked = 0 
-        LIMIT ?;
-        """
-        available_seats = execute_query(query, (showtime_id, seat_type, num_tickets), fetch_all=True)
-
-        if not available_seats:
-            return "❌ Seats could not be allocated!"
-
-        booking_reference = generate_booking_reference()
-        if not booking_reference:
-            return "❌ Failed to generate booking reference."
-
-        total_price = sum(seat[1] for seat in available_seats)
-
-        for seat in available_seats:
-            seat_id = seat[0]
-            query = """
-            INSERT INTO bookings (booking_staff_id, customer_name, customer_phone, customer_email, 
-                                  showtime_id, seat_id, booking_reference, total_price, booking_date) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-            """
-            params = (
-                booking_staff_id, customer_name, customer_phone, customer_email, showtime_id, seat_id,
-                booking_reference, total_price, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
-
-            execute_query(query, params, commit=True)
-            execute_query("UPDATE seats SET is_booked = 1 WHERE id = ?", (seat_id,), commit=True)
-
-        return f"✅ Booking Successful! Reference: {booking_reference}, Total Price: £{total_price}"
-
-    except Exception as e:
-        print(f"❌ Database Error in booking tickets: {e}")
-        return "❌ Booking failed due to an internal error."
+#  Booking Staff Login
 
 
-def cancel_booking(booking_reference):
-    """Cancel a booking and apply refund rules."""
-    try:
-        query = """
-        SELECT bookings.id, showtimes.show_time, bookings.total_price, bookings.seat_id 
-        FROM bookings 
-        JOIN showtimes ON bookings.showtime_id = showtimes.id
-        WHERE booking_reference = ?;
-        """
-        booking = execute_query(query, (booking_reference,), fetch_one=True)
+def login_staff(username, password):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, password FROM users WHERE LOWER(username) = LOWER(?)", (username,))
+        user = cursor.fetchone()
+
+    if user and password == user["password"]:  # Replace this with secure hash check if needed
+        return {"success": True, "user_id": user["id"]}
+    else:
+        return {"success": False, "message": "Invalid username or password"}
+
+
+
+#  Cinema & Film Data
+
+
+def fetch_cinemas():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, city, location FROM cinemas")
+        return cursor.fetchall()
+
+
+def fetch_films_by_cinema(cinema_id):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT films.id, films.title, films.genre, films.age_rating, films.description,
+                   GROUP_CONCAT(showtimes.show_time) AS showtimes
+            FROM films
+            JOIN showtimes ON films.id = showtimes.film_id
+            WHERE showtimes.cinema_id = ?
+            GROUP BY films.id
+        """, (cinema_id,))
+        return cursor.fetchall()
+
+
+def get_showtime_seats(showtime_id):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.id AS showtime_id, s.show_time, s.screen_number, s.cinema_id, f.title
+            FROM showtimes s
+            JOIN films f ON s.film_id = f.id
+            WHERE s.id = ?
+        """, (showtime_id,))
+        showtime = cursor.fetchone()
+
+        if not showtime:
+            return {"error": "Showtime not found"}
+
+        cursor.execute("SELECT city FROM cinemas WHERE id = ?", (showtime["cinema_id"],))
+        city = cursor.fetchone()["city"]
+
+        cursor.execute("""
+            SELECT id FROM screens
+            WHERE screen_number = ? AND cinema_id = ?
+        """, (showtime["screen_number"], showtime["cinema_id"]))
+        screen_id = cursor.fetchone()["id"]
+
+        cursor.execute("""
+            SELECT s.id, s.seat_number, s.seat_type,
+                   CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END AS is_booked
+            FROM seats s
+            LEFT JOIN bookings b ON s.id = b.seat_id AND b.showtime_id = ?
+            WHERE s.screen_id = ?
+            ORDER BY s.seat_number
+        """, (showtime_id, screen_id))
+        seats = cursor.fetchall()
+
+        seat_list = []
+        for seat in seats:
+            seat_dict = dict(seat)
+            seat_dict["price"] = get_dynamic_price(city, showtime["show_time"], seat_dict["seat_type"])
+            seat_list.append(seat_dict)
+
+        return {
+            "showtime": dict(showtime),
+            "seats": seat_list
+        }
+
+
+
+#  Price Calculation
+
+
+def get_dynamic_price(city, show_time, seat_type):
+    show_time_obj = datetime.strptime(show_time, "%Y-%m-%d %H:%M:%S")
+    hour = show_time_obj.hour
+    base_prices = {
+        "Birmingham": [5, 6, 7],
+        "Bristol": [6, 7, 8],
+        "Cardiff": [5, 6, 7],
+        "London": [10, 11, 12]
+    }
+    if 8 <= hour < 12:
+        slot = 0
+    elif 12 <= hour < 17:
+        slot = 1
+    else:
+        slot = 2
+    base = base_prices.get(city, [6, 7, 8])[slot]
+    if seat_type.lower() == "upper gallery":
+        return round(base * 1.2, 2)
+    elif seat_type.lower() == "vip":
+        return round(base * 1.2 * 1.2, 2)
+    return round(base, 2)
+
+
+
+#  Booking Tickets
+
+
+def book_tickets(user_id, showtime_id, name, email, phone, seat_ids):
+    if isinstance(seat_ids, str):
+        seat_ids = seat_ids.split(",")
+
+    booking_reference = str(uuid.uuid4())[:8]
+    now = datetime.now()
+    total_price = 0
+    discounts = []
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT show_time, cinema_id FROM showtimes WHERE id = ?", (showtime_id,))
+        data = cursor.fetchone()
+        if not data:
+            return {"error": "Invalid showtime"}
+
+        show_time, cinema_id = data
+        dt = datetime.strptime(show_time, "%Y-%m-%d %H:%M:%S")
+
+        if dt > now + timedelta(days=7):
+            return {"error": "Booking allowed up to 7 days only"}
+
+        within_30 = 0 <= (dt - now).total_seconds() <= 1800
+
+        cursor.execute("SELECT city FROM cinemas WHERE id = ?", (cinema_id,))
+        city = cursor.fetchone()["city"]
+
+        cursor.execute("SELECT COUNT(*) FROM seats WHERE screen_id IN (SELECT id FROM screens WHERE cinema_id = ?)", (cinema_id,))
+        total_seats = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM bookings WHERE showtime_id = ?", (showtime_id,))
+        booked_seats = cursor.fetchone()[0]
+        occupancy = booked_seats / total_seats if total_seats else 1
+
+        last_minute = within_30 and occupancy < 0.7
+        family_discount = len(seat_ids) >= 4
+
+        for sid in seat_ids:
+            cursor.execute("SELECT seat_type FROM seats WHERE id = ?", (sid,))
+            row = cursor.fetchone()
+            seat_type = row["seat_type"] if row else "Lower Hall"
+            price = get_dynamic_price(city, show_time, seat_type)
+
+            if last_minute:
+                price *= 0.75
+                if "last_minute" not in discounts:
+                    discounts.append("last_minute")
+            if family_discount:
+                price *= 0.80
+                if "family" not in discounts:
+                    discounts.append("family")
+
+            total_price += price
+
+            cursor.execute("""
+                INSERT INTO bookings (
+                    customer_name, customer_email, customer_phone,
+                    showtime_id, seat_id, booking_reference, total_price,
+                    booking_staff_id, booking_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, email, phone, showtime_id, sid, booking_reference,
+                  price, user_id, now.strftime("%Y-%m-%d %H:%M:%S")))
+            cursor.execute("UPDATE seats SET is_booked = 1 WHERE id = ?", (sid,))
+
+        conn.commit()
+
+    return {
+        "booking_reference": booking_reference,
+        "total_price": round(total_price, 2),
+        "discounts": discounts
+    }
+
+# get all cinemas
+
+
+def get_all_cinemas():
+    return fetch_cinemas()
+
+
+# REFUND
+
+def get_booking_by_ref_or_email(ref_or_email):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT b.*, s.show_time
+            FROM bookings b
+            JOIN showtimes s ON b.showtime_id = s.id
+            WHERE b.booking_reference = ? OR b.customer_email = ?
+        """, (ref_or_email, ref_or_email))
+        return cursor.fetchall()
+
+def process_refund(booking_id):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT showtime_id, total_price, booking_date FROM bookings WHERE id = ?", (booking_id,))
+        booking = cursor.fetchone()
 
         if not booking:
-            return "❌ Booking reference not found!"
+            return {"success": False, "message": "Booking not found"}
 
-        booking_id, show_time, total_price, seat_id = booking
+        showtime_id = booking["showtime_id"]
+        total_price = booking["total_price"]
+        booking_date = booking["booking_date"]
 
-        show_date = datetime.datetime.strptime(show_time, "%Y-%m-%d %H:%M:%S").date()
-        today = datetime.date.today()
+        from datetime import datetime, timedelta
+        showtime_date = datetime.strptime(booking_date, "%Y-%m-%d %H:%M:%S")
+        now = datetime.now()
 
-        if today >= show_date:
-            return "❌ Cannot cancel on the day of the show. No refund!"
+        if showtime_date.date() <= now.date():
+            return {"success": False, "message": "Cancellation not allowed on the day of show"}
 
-        if (show_date - today).days < 1:
-            return "❌ You can only cancel at least 1 day before the showtime!"
+        refund = round(total_price * 0.5, 2)
+        cursor.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
+        cursor.execute("""
+            INSERT INTO cancellations (booking_id, cancellation_date, refund_amount)
+            VALUES (?, ?, ?)
+        """, (booking_id, now.strftime("%Y-%m-%d %H:%M:%S"), refund))
+        conn.commit()
 
-        refund_amount = total_price * 0.5
-
-        query = """
-        INSERT INTO cancellations (booking_id, cancellation_date, refund_amount) 
-        VALUES (?, ?, ?);
-        """
-        execute_query(query, (booking_id, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), refund_amount), commit=True)
-        execute_query("UPDATE seats SET is_booked = 0 WHERE id = ?", (seat_id,), commit=True)
-
-        return f"✅ Booking Canceled! Refund Amount: £{refund_amount}"
-
-    except Exception as e:
-        print(f"❌ Database Error in cancelling booking: {e}")
-        return "❌ Cancellation failed due to an internal error."
+        return {"success": True, "refund": refund}

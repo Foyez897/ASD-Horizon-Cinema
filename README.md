@@ -14,15 +14,16 @@ Key Features:
 	•	Testing: Automated testing for booking, cancellation, and authentication.
 	•	System Design: Use case diagrams, class diagrams, and sequence diagrams for the system architecture.
 
-
-Table of Contents
-    •	Installation
-	•	Usage
-	•	Database Structure
-	•	Features
-	•	Testing
-	•	Contributing
-	•	License
+ Project Structure:
+├── controllers/     # Logic handlers
+├── views/           # GUI windows
+├── models/          # Data abstraction
+├── database/        # SQLite setup and DB file
+├── static/          # Images/logos
+├── tests/           # Unit & integration tests
+├── main.py          # Entry point
+├── README.md
+└── requirements.txt
 
     
 Installation
@@ -59,22 +60,8 @@ The project uses an SQLite database (horizon_cinemas.db) with the following tabl
 	•	cancellations: Tracks canceled bookings and refund amounts.
 	•	pricing: Defines pricing for different cinemas and showtimes.
 
-    Features
-	1.	Film Listings & Showtimes: Allows users to view available films and showtimes across different cinemas.
-	2.	Ticket Booking: Users can book tickets, with the system ensuring enough availability and correct pricing.
-	3.	Ticket Cancellations: Users can cancel bookings if done at least 1 day before the showtime, with a 50% refund.
-	4.	Admin & Manager Views: Admins can manage films, cinemas, and view reports, while managers can add new cinemas.
-	5.	Secure Login: Role-based login system with password hashing.
-	6.	Pricing Calculation: Pricing based on cinema, seat type, and time of the day.
-	7.	Database Management: A centralized database for managing all bookings, users, and films.
-
-Testing
-Automated tests are included to ensure the system’s functionality:
-	•	Test Booking: Ensures ticket booking logic works correctly and validates seat availability.
-	•	Test Cancellations: Ensures that the cancellation logic adheres to the 50% refund rule.
-	•	Test Authentication: Validates the secure login functionality.
-
-To run the tests, use the following command:PYTHONPATH=. python tests/test_booking.py
+▶️ Usage:
+python main.py
 
 Contributing
 Contributions are welcome! Please fork this repository, create a new branch, and submit a pull request with your changes.
