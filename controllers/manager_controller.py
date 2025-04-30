@@ -2,10 +2,7 @@ from database.database_setup import get_db_connection
 import bcrypt
 from datetime import datetime
 
-
-
 # Manager Login
-
 def manager_login(username, password):
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -24,13 +21,10 @@ def manager_login(username, password):
     return {"success": True, "manager_id": user["id"]}
 
 
-
 # Dashboard Data
-
 def get_manager_dashboard(manager_id):
     with get_db_connection() as conn:
         cursor = conn.cursor()
-
         cursor.execute("SELECT role FROM users WHERE id = ?", (manager_id,))
         user = cursor.fetchone()
 
@@ -49,13 +43,10 @@ def get_manager_dashboard(manager_id):
     return {"success": True, "booking_summary": booking_summary}
 
 
-
 # Add Cinema & Screens
-
 def add_cinema(city, address, num_of_screens, seat_config, seat_data_per_screen):
     with get_db_connection() as conn:
         cursor = conn.cursor()
-
         cursor.execute(
             "INSERT INTO cinemas (city, location, num_of_screens) VALUES (?, ?, ?)",
             (city, address, num_of_screens)
@@ -79,9 +70,7 @@ def add_cinema(city, address, num_of_screens, seat_config, seat_data_per_screen)
     return {"success": True, "message": "Cinema and screens added successfully"}
 
 
-
 # Seat Generator
-
 def generate_seats(cursor, screen_id, total_seats, vip_count=10):
     lower = round(total_seats * 0.3)
     vip = min(vip_count, total_seats - lower)
@@ -105,3 +94,30 @@ def generate_seats(cursor, screen_id, total_seats, vip_count=10):
             "INSERT INTO seats (screen_id, seat_number, seat_type, is_booked) VALUES (?, ?, ?, 0)",
             (screen_id, seat_number, "VIP"))
         seat_number += 1
+
+
+# ✅ Get all cinemas
+def get_all_cinemas():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, city, location, num_of_screens FROM cinemas")
+        cinemas = cursor.fetchall()
+    return cinemas
+
+
+# ✅ Delete cinema
+def delete_cinema(cinema_id):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cinemas WHERE id = ?", (cinema_id,))
+        conn.commit()
+    return {"success": True, "message": "Cinema deleted successfully"}
+
+
+# ✅ Update cinema screen count
+def update_cinema_screens(cinema_id, new_screen_count):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE cinemas SET num_of_screens = ? WHERE id = ?", (new_screen_count, cinema_id))
+        conn.commit()
+    return {"success": True, "message": "Number of screens updated"}

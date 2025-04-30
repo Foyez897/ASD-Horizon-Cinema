@@ -2,7 +2,8 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-from controllers.booking_controller import get_all_cinemas  # You must implement this
+from controllers.booking_controller import get_all_cinemas
+from views.select_cinema import SelectShowtimeView
 
 class BookingView(tk.Toplevel):
     def __init__(self, parent, from_manager=False):
@@ -27,42 +28,30 @@ class BookingView(tk.Toplevel):
         tk.Button(nav, text="Logout", command=self.logout, bg="white").pack(side=tk.RIGHT, padx=10)
 
     def create_booking_portal(self):
-        tk.Label(self, text="🎟️ Staff Booking Portal", font=("Helvetica", 16), bg="white").pack(pady=15)
+        tk.Label(self, text="🎟️ Staff Booking Portal", font=("Arial", 14, "bold"), bg="white").pack(pady=10)
 
-        if self.from_manager:
-            tk.Label(self, text="⚠️ Accessing Booking Portal from Manager View", fg="blue", bg="white").pack(pady=5)
+        cinemas = get_all_cinemas()
+        cinema_names = [f"{c['city']} - {c['location']}" for c in cinemas]
 
-        form_frame = tk.Frame(self, bg="white")
-        form_frame.pack(pady=20)
+        ttk.Label(self, text="Select a cinema:", background="white").pack()
+        cinema_dropdown = ttk.Combobox(self, textvariable=self.cinema_var, values=cinema_names, state="readonly")
+        cinema_dropdown.pack(pady=10)
 
-        tk.Label(form_frame, text="Choose a Cinema:", bg="white").grid(row=0, column=0, padx=10, pady=10)
+        tk.Button(self, text="Continue", command=lambda: self.continue_to_showtimes(cinemas)).pack(pady=10)
 
-        self.cinema_combo = ttk.Combobox(form_frame, textvariable=self.cinema_var, width=40, state="readonly")
-        self.cinema_combo.grid(row=0, column=1, padx=10)
-
-        self.populate_cinemas()
-
-        tk.Button(self, text="Continue", command=self.continue_to_showtimes, bg="blue", fg="white", width=20).pack(pady=10)
-        tk.Button(self, text="💸 Refund Ticket", command=self.open_refund, bg="gray", fg="white", width=20).pack(pady=5)
-
-    def populate_cinemas(self):
-        cinemas = get_all_cinemas()  # e.g., [{'id': 1, 'city': 'Bristol', 'location': 'Centre'}, ...]
-        self.cinema_map = {f"{c['city']} - {c['location']}": c['id'] for c in cinemas}
-        self.cinema_combo['values'] = list(self.cinema_map.keys())
-
-    def continue_to_showtimes(self):
+    def continue_to_showtimes(self, cinemas):
         selected = self.cinema_var.get()
         if not selected:
             messagebox.showwarning("Warning", "Please select a cinema.")
             return
 
-        cinema_id = self.cinema_map[selected]
-        from views.select_cinema import SelectCinemaView
-        SelectCinemaView(self, cinema_id)
-
-    def open_refund(self):
-        from views.refund import RefundView
-        RefundView(self)
+        for cinema in cinemas:
+            label = f"{cinema['city']} - {cinema['location']}"
+            if selected == label:
+                self.destroy()
+                SelectShowtimeView(self.master, cinema, cinema['id'])
+                return
 
     def logout(self):
         self.destroy()
+        self.master.deiconify()

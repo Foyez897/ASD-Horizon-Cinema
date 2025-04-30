@@ -5,7 +5,6 @@ import bcrypt
 
 # Authentication
 
-
 def authenticate_user(username, password, allowed_roles=("admin", "manager")):
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -18,9 +17,7 @@ def authenticate_user(username, password, allowed_roles=("admin", "manager")):
     return None, None
 
 
-
 # Admin Dashboard Data
-
 
 def get_admin_dashboard_data():
     with get_db_connection() as conn:
@@ -69,9 +66,7 @@ def get_admin_dashboard_data():
     return films, film_cinemas, cinema_dropdown
 
 
-
 # Utility Fetchers
-
 
 def get_cinemas():
     with get_db_connection() as conn:
@@ -79,13 +74,11 @@ def get_cinemas():
         cursor.execute("SELECT id, city, location FROM cinemas")
         return cursor.fetchall()
 
-
 def get_film_info():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM films")
         return cursor.fetchall()
-
 
 def get_screens_by_cinema(cinema_id):
     with get_db_connection() as conn:
@@ -94,9 +87,14 @@ def get_screens_by_cinema(cinema_id):
         return [row["screen_number"] for row in cursor.fetchall()]
 
 
+def get_all_cinemas():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, city, location FROM cinemas")
+        return cursor.fetchall()
+
 
 # Film Management
-
 
 def add_new_film(title, genre, age_rating, description, cinema_id, showtimes, screens, price):
     with get_db_connection() as conn:
@@ -116,7 +114,6 @@ def add_new_film(title, genre, age_rating, description, cinema_id, showtimes, sc
         conn.commit()
         return True
 
-
 def delete_film(film_id):
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -124,7 +121,6 @@ def delete_film(film_id):
         cursor.execute("DELETE FROM showtimes WHERE film_id = ?", (film_id,))
         conn.commit()
     return True
-
 
 def update_film(film_id, title, genre, age_rating):
     with get_db_connection() as conn:
@@ -138,9 +134,7 @@ def update_film(film_id, title, genre, age_rating):
     return True
 
 
-
 # Showtime Grid View Logic
-
 
 def get_manage_film_data(cinema_id, selected_date=None):
     selected_date = selected_date or datetime.now().strftime('%Y-%m-%d')
@@ -176,9 +170,7 @@ def get_manage_film_data(cinema_id, selected_date=None):
     return films, cinema, screens, showtime_map
 
 
-
 # Ajax Showtime Addition
-
 
 def add_showtime_ajax(film_id, cinema_id, screen_number, date, time_slot, price=10.0):
     show_time = f"{date} {time_slot}:00"
@@ -199,8 +191,6 @@ def add_showtime_ajax(film_id, cinema_id, screen_number, date, time_slot, price=
 
     return True, film["title"]
 
-
-# showing film today 
 
 def get_films_showing_today():
     today = datetime.now().strftime('%Y-%m-%d')
@@ -238,7 +228,50 @@ def get_films_showing_today():
 
     return list(film_map.values())
 
-# admin login( admin credintial)
 
 def validate_admin_credentials(username, password):
     return authenticate_user(username, password, allowed_roles=("admin",))
+
+
+def get_film_listings():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, genre, age_rating, description FROM films")
+        rows = cursor.fetchall()
+
+    films = []
+    for row in rows:
+        films.append({
+            "id": row["id"],
+            "title": row["title"],
+            "genre": row["genre"],
+            "age_rating": row["age_rating"],
+            "description": row["description"]
+        })
+
+    return films
+
+
+def delete_showtime(showtime_id):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM showtimes WHERE id = ?", (showtime_id,))
+        conn.commit()
+    return True
+
+
+def get_showtime_id_by_screen_time(cinema_id, screen_number, time_slot):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.id AS showtime_id,
+                   f.title AS film_title,
+                   s.screen_number
+            FROM showtimes s
+            JOIN films f ON f.id = s.film_id
+            WHERE s.cinema_id = ?
+              AND s.screen_number = ?
+              AND strftime('%H:%M', s.show_time) = ?
+            LIMIT 1
+        """, (cinema_id, screen_number, time_slot))
+        return cursor.fetchone()

@@ -1,10 +1,10 @@
-# views/select_showtime.py
-
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 from controllers.showtime_controller import get_showtime_map_for_cinema
-from views.view_showtime import ViewShowtime  # the detailed view window
+from controllers.admin_controller import get_showtime_id_by_screen_time
+from views.view_showtime import ViewShowtimeApp
+
 
 class SelectShowtimeView(tk.Toplevel):
     def __init__(self, parent, cinema, cinema_id):
@@ -46,7 +46,6 @@ class SelectShowtimeView(tk.Toplevel):
     def create_timetable(self):
         self.table_frame = tk.Frame(self, bg="white")
         self.table_frame.pack(padx=20, pady=10, fill="both", expand=True)
-
         self.refresh_table()
 
     def refresh_table(self):
@@ -56,7 +55,6 @@ class SelectShowtimeView(tk.Toplevel):
         date = self.date_entry.get()
         showtime_map, screens, time_slots = get_showtime_map_for_cinema(self.cinema_id, date)
 
-        # Header row
         tk.Label(self.table_frame, text="Screen", font=("Arial", 10, "bold"), bg="#343a40", fg="white", width=12).grid(row=0, column=0)
         for col, time in enumerate(time_slots, start=1):
             tk.Label(self.table_frame, text=time, font=("Arial", 10, "bold"), bg="#343a40", fg="white", width=15).grid(row=0, column=col)
@@ -67,16 +65,25 @@ class SelectShowtimeView(tk.Toplevel):
             for col_idx, time in enumerate(time_slots, start=1):
                 key = (screen, time)
                 if key in showtime_map:
-                    show = showtime_map[key]
-                    btn = tk.Button(self.table_frame,
-                                    text=f"{show['title']}\n🕓 {show['show_time'][11:16]}",
-                                    width=15, height=3,
-                                    command=lambda sid=show["id"]: self.open_showtime_view(sid),
-                                    bg="#f8f9fa")
+                    film_title = showtime_map[key]
+                    btn = tk.Button(
+                        self.table_frame,
+                        text=f"{film_title}\n🕓 {time}",
+                        width=15,
+                        height=3,
+                        bg="#f8f9fa",
+                        command=lambda s=screen, t=time: self.open_showtime_view(s, t)
+                    )
                 else:
                     btn = tk.Label(self.table_frame, text="N/A", width=15, height=3, bg="#e9ecef", fg="gray")
 
                 btn.grid(row=row_idx, column=col_idx, padx=1, pady=1)
 
-    def open_showtime_view(self, showtime_id):
-        ViewShowtime(self, showtime_id)
+    def open_showtime_view(self, screen_number, time_slot):
+        result = get_showtime_id_by_screen_time(self.cinema_id, screen_number, time_slot)
+        if result:
+            showtime_id = result["showtime_id"]
+            film_title = result["film_title"]
+            ViewShowtimeApp(self, showtime_id, screen_number, film_title, self.cinema_id)
+        else:
+            tk.messagebox.showerror("Error", f"No showtime found for Screen {screen_number} at {time_slot}")

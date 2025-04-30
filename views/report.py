@@ -1,10 +1,8 @@
-# views/bookings_per_film_report.py
-
 import tkinter as tk
 from tkinter import ttk
 from controllers.report_controller import get_bookings_per_film
 
-class BookingsPerFilmReport(tk.Toplevel):
+class GenericReportView(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("📊 Bookings per Film - Horizon Cinemas")
@@ -42,6 +40,6 @@ class BookingsPerFilmReport(tk.Toplevel):
         tree.column("bookings", anchor="center", width=150)
 
         for row in data:
-            tree.insert("", "end", values=(row["title"], row["total_bookings"]))
+            tree.insert("", "end", values=(row["film_title"], row["total_bookings"]))
 
         tree.pack(fill="both", expand=True)
