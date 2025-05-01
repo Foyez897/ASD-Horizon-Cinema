@@ -2,47 +2,22 @@
 
 import tkinter as tk
 
-class ReceiptView(tk.Toplevel):
-    def __init__(self, parent, booking):
-        super().__init__(parent)
-        self.title("🎟️ Booking Receipt - Horizon Cinemas")
-        self.geometry("500x500")
-        self.configure(bg="white")
+def show_receipt(name, email, phone, ref, showtime_id, seats, total_price):
+    win = tk.Toplevel()
+    win.title("Booking Receipt")
+    win.geometry("400x350")
+    win.resizable(False, False)
 
-        self.booking = booking
-        self.create_navbar()
-        self.create_receipt()
+    tk.Label(win, text="🎟 Booking Receipt", font=("Arial", 16, "bold")).pack(pady=10)
 
-    def create_navbar(self):
-        nav = tk.Frame(self, bg="black")
-        nav.pack(fill=tk.X)
-        tk.Label(nav, text="🎬 Horizon Cinemas", fg="white", bg="black", font=("Arial", 16)).pack(side=tk.LEFT, padx=10, pady=10)
+    tk.Label(win, text=f"Customer: {name}", font=("Arial", 12)).pack()
+    tk.Label(win, text=f"Email: {email}", font=("Arial", 12)).pack()
+    tk.Label(win, text=f"Phone: {phone}", font=("Arial", 12)).pack()
+    tk.Label(win, text=f"Reference: {ref}", font=("Arial", 12)).pack()
+    tk.Label(win, text=f"Showtime ID: {showtime_id}", font=("Arial", 12)).pack()
 
-    def create_receipt(self):
-        container = tk.Frame(self, bg="white")
-        container.pack(padx=20, pady=20, fill="both", expand=True)
+    seat_text = ", ".join(map(str, seats))
+    tk.Label(win, text=f"Seats: {seat_text}", font=("Arial", 12)).pack()
+    tk.Label(win, text=f"Total Paid: £{total_price:.2f}", font=("Arial", 12, "bold")).pack(pady=10)
 
-        header = tk.Label(container, text="🎟️ Booking Receipt", font=("Helvetica", 14, "bold"), fg="white", bg="green", pady=10)
-        header.pack(fill=tk.X)
-
-        fields = [
-            ("Booking Ref", self.booking["booking_reference"]),
-            ("Film", self.booking["film_title"]),
-            ("Date", self.booking["show_time"][:10]),
-            ("Time", self.booking["show_time"][11:16]),
-            ("Cinema", f"{self.booking['location']}, {self.booking['city']}"),
-            ("Screen", self.booking["screen_number"]),
-            ("Seat(s)", ", ".join(self.booking["seat_numbers"])),
-            ("Total Cost", f"£{self.booking['total_price']:.2f}"),
-            ("Booking Date", self.booking["booking_date"]),
-            ("Ticket booked by", self.booking["staff_name"]),
-        ]
-
-        for label, value in fields:
-            row = tk.Frame(container, bg="white")
-            row.pack(anchor="w", pady=3)
-            tk.Label(row, text=f"{label}:", font=("Arial", 10, "bold"), bg="white").pack(side=tk.LEFT)
-            tk.Label(row, text=f" {value}", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
-
-        tk.Label(self, text="© 2025 Horizon Cinemas. All Rights Reserved.",
-                 fg="white", bg="black", pady=10).pack(side=tk.BOTTOM, fill=tk.X)
+    tk.Button(win, text="Close", command=win.destroy).pack(pady=10)

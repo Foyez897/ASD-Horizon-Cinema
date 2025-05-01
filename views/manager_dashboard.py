@@ -41,12 +41,12 @@ class ManagerDashboard(tk.Toplevel):
 
         # Manage Cinemas
         tk.Label(frame, text="🏢 Manage Cinemas", font=("Helvetica", 14), bg="white").pack(pady=5)
-        tk.Button(frame, text="➕ Add New Cinema", command=self.open_add_cinema, bg="green", fg="white", width=30).pack(pady=2)
-        tk.Button(frame, text="🏙️ Manage Existing Cinemas", command=self.open_manage_cinemas, bg="blue", fg="white", width=30).pack(pady=2)
+        tk.Button(frame, text="➕ Add New Cinema", command=self.open_add_cinema, bg="#d4edda", fg="black", width=30).pack(pady=2)
+        tk.Button(frame, text="🏙️ Manage Existing Cinemas", command=self.open_manage_cinemas, bg="#cce5ff", fg="black", width=30).pack(pady=2)
 
         # Admin Controls
         tk.Label(frame, text="🛠 Admin Controls", font=("Helvetica", 14), bg="white").pack(pady=10)
-        tk.Button(frame, text="🔑 Access Admin Dashboard", command=self.open_admin_dashboard, bg="orange", fg="white", width=30).pack(pady=2)
+        tk.Button(frame, text="🔑 Access Admin Dashboard", command=self.open_admin_dashboard, bg="#ffeeba", fg="black", width=30).pack(pady=2)
 
         # Booking Menu
         tk.Label(frame, text="🎫 Booking Menu", font=("Helvetica", 14), bg="white").pack(pady=10)
@@ -66,7 +66,6 @@ class ManagerDashboard(tk.Toplevel):
         for label, func, title in reports:
             tk.Button(frame, text=f"📄 {label}", command=lambda f=func, t=title: self.open_report(f, t), width=40).pack(pady=2)
 
-    # Navigation methods
     def open_add_cinema(self):
         AddCinemaView(self)
 
@@ -88,7 +87,6 @@ class ManagerDashboard(tk.Toplevel):
             tk.messagebox.showinfo("No Data", "No data available for this report.")
             return
 
-        # Define columns depending on report
         if title == "Bookings per Film":
             columns = [
                 {"key": "title", "display_name": "Film Title"},
@@ -105,7 +103,7 @@ class ManagerDashboard(tk.Toplevel):
                 {"key": "title", "display_name": "Film Title"},
                 {"key": "revenue", "display_name": "Revenue (£)", "format": "currency"}
             ]
-        else:  # Staff Bookings
+        else:
             columns = [
                 {"key": "staff_name", "display_name": "Staff"},
                 {"key": "bookings", "display_name": "Bookings", "format": "integer"},

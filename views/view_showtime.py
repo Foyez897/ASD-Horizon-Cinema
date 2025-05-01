@@ -1,6 +1,10 @@
 import tkinter as tk
 from tkinter import messagebox
 from database.database_setup import get_db_connection
+import sqlite3
+import random
+import datetime
+from views.receipt import show_receipt  # ✅ external receipt popup
 
 class ViewShowtimeApp:
     def __init__(self, master, showtime_id, screen_number, film_title, cinema_id):
@@ -12,7 +16,7 @@ class ViewShowtimeApp:
         self.selected_seats = set()
 
         self.master.title(f"Choose Seats - {film_title}")
-        self.master.geometry("800x600")
+        self.master.geometry("900x700")
 
         self.screen_id = self.get_screen_id()
         if self.screen_id:
@@ -32,7 +36,6 @@ class ViewShowtimeApp:
     def build_ui(self):
         tk.Label(self.master, text=f"Choose Your Seats for: {self.film_title}", font=("Arial", 16)).pack(pady=10)
 
-        # Scrollable container
         container = tk.Frame(self.master)
         container.pack(fill="both", expand=True)
 
@@ -50,7 +53,21 @@ class ViewShowtimeApp:
         scrollbar_y.pack(side="right", fill="y")
         scrollbar_x.pack(side="bottom", fill="x")
 
-        # Confirm booking
+        customer_frame = tk.Frame(self.master)
+        customer_frame.pack(pady=10)
+
+        tk.Label(customer_frame, text="Name:").grid(row=0, column=0)
+        self.name_entry = tk.Entry(customer_frame, width=30)
+        self.name_entry.grid(row=0, column=1)
+
+        tk.Label(customer_frame, text="Email:").grid(row=1, column=0)
+        self.email_entry = tk.Entry(customer_frame, width=30)
+        self.email_entry.grid(row=1, column=1)
+
+        tk.Label(customer_frame, text="Phone:").grid(row=2, column=0)
+        self.phone_entry = tk.Entry(customer_frame, width=30)
+        self.phone_entry.grid(row=2, column=1)
+
         self.confirm_btn = tk.Button(self.master, text="Confirm Booking", command=self.confirm_booking)
         self.confirm_btn.pack(pady=10)
 
@@ -67,6 +84,7 @@ class ViewShowtimeApp:
             """, (self.showtime_id, self.screen_id))
             seats = cursor.fetchall()
 
+        self.seat_buttons = {}  # seat_id: seat_number
         for idx, seat in enumerate(seats):
             seat_id = seat["id"]
             seat_num = seat["seat_number"]
@@ -78,12 +96,13 @@ class ViewShowtimeApp:
                             state=tk.DISABLED if is_booked else tk.NORMAL)
 
             if not is_booked:
-                btn.config(command=lambda sid=seat_id, b=btn: self.toggle_seat(sid, b))
+                btn.config(command=lambda sid=seat_id, sn=seat_num, b=btn: self.toggle_seat(sid, sn, b))
 
+            self.seat_buttons[seat_id] = seat_num
             row, col = divmod(idx, 10)
             btn.grid(row=row, column=col, padx=5, pady=5)
 
-    def toggle_seat(self, seat_id, btn):
+    def toggle_seat(self, seat_id, seat_num, btn):
         if seat_id in self.selected_seats:
             self.selected_seats.remove(seat_id)
             btn.config(relief=tk.RAISED)
@@ -105,6 +124,40 @@ class ViewShowtimeApp:
             messagebox.showinfo("No seats selected", "Please select at least one seat.")
             return
 
-        # Future booking insert logic goes here
-        messagebox.showinfo("Booking Confirmed", f"You booked {len(self.selected_seats)} seat(s).")
-        self.master.destroy()
+        name = self.name_entry.get().strip()
+        email = self.email_entry.get().strip()
+        phone = self.phone_entry.get().strip()
+
+        if not (name and email and phone):
+            messagebox.showwarning("Missing Info", "Please fill in all customer details.")
+            return
+
+        booking_reference = f"{random.randint(1000, 9999):x}{random.randint(1000, 9999):x}"[:8]
+        booking_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        total_price_per_seat = 8.064
+        booking_staff_id = 3
+
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            for seat_id in self.selected_seats:
+                cursor.execute("""
+                    INSERT INTO bookings (customer_name, customer_email, customer_phone,
+                                          showtime_id, seat_id, booking_reference,
+                                          total_price, booking_staff_id, booking_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (name, email, phone, self.showtime_id, seat_id, booking_reference,
+                      total_price_per_seat, booking_staff_id, booking_date))
+
+            conn.commit()
+            conn.close()
+
+            seat_numbers = [self.seat_buttons[sid] for sid in self.selected_seats]
+            show_receipt(name, email, phone, booking_reference, self.showtime_id,
+                         seat_numbers, total_price_per_seat * len(self.selected_seats))
+
+            self.master.destroy()
+
+        except Exception as e:
+            messagebox.showerror("Booking Failed", f"Error: {e}")
