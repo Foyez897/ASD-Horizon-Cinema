@@ -24,7 +24,7 @@ class StaffLoginView(tk.Toplevel):
         tk.Label(nav, text="🎬 Horizon Cinemas", fg="white", bg="black", font=("Arial", 16)).pack(side=tk.LEFT, padx=10, pady=10)
 
     def create_form(self):
-        tk.Label(self, text="🧾 Booking Staff Login", font=("Helvetica", 16), bg="white").pack(pady=15)
+        tk.Label(self, text="🧾 Booking Staff Login", font=("Helvetica", 16), bg="black").pack(pady=15)
 
         form = tk.Frame(self, bg="white")
         form.pack(pady=10)

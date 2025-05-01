@@ -43,10 +43,12 @@ def get_staff_bookings():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT u.username, COUNT(b.id) AS total_handled
+            SELECT u.username AS staff_name,
+                   strftime('%Y-%m', b.booking_date) AS month,
+                   COUNT(b.id) AS total_bookings
             FROM bookings b
-            JOIN users u ON b.staff_id = u.id
-            GROUP BY u.username
-            ORDER BY total_handled DESC
+            JOIN users u ON b.booking_staff_id = u.id
+            GROUP BY u.username, month
+            ORDER BY month DESC, total_bookings DESC
         """)
         return cursor.fetchall()

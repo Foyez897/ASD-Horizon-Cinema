@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from controllers.report_controller import get_monthly_revenue
 
-class MonthlyRevenueReport(tk.Toplevel):
+class MonthlyRevenueReportView(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("📊 Monthly Revenue Report - Horizon Cinemas")
@@ -42,6 +42,11 @@ class MonthlyRevenueReport(tk.Toplevel):
         tree.column("revenue", anchor="center", width=150)
 
         for row in data:
-            tree.insert("", "end", values=(row["month"], f"£{row['total_revenue']:.2f}"))
+            try:
+                month = row["month"]
+                revenue = row["total_revenue"]
+                tree.insert("", "end", values=(month, f"£{revenue:.2f}"))
+            except (KeyError, IndexError):
+                print(f"⚠️ Skipping row due to missing keys: {dict(row)}")
 
         tree.pack(fill="both", expand=True)

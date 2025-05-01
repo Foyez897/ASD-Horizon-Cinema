@@ -233,7 +233,7 @@ def validate_admin_credentials(username, password):
     return authenticate_user(username, password, allowed_roles=("admin",))
 
 
-def get_film_listings():
+def get_film_listings(cinema_id):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, title, genre, age_rating, description FROM films")

@@ -28,7 +28,7 @@ class BookingView(tk.Toplevel):
         tk.Button(nav, text="Logout", command=self.logout, bg="white").pack(side=tk.RIGHT, padx=10)
 
     def create_booking_portal(self):
-        tk.Label(self, text="🎟️ Staff Booking Portal", font=("Arial", 14, "bold"), bg="white").pack(pady=10)
+        tk.Label(self, text="🎟️ Staff Booking Portal", font=("Arial", 14, "bold"), bg="black").pack(pady=10)
 
         cinemas = get_all_cinemas()
         cinema_names = [f"{c['city']} - {c['location']}" for c in cinemas]

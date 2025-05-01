@@ -2,9 +2,7 @@ import sqlite3
 import bcrypt
 from database.database_setup import get_db_connection
 
-
 # User Authentication & Authorization
-
 
 def authenticate_user(username, password):
     """
@@ -24,7 +22,6 @@ def authenticate_user(username, password):
             }
         return None
 
-
 def get_user_role(user_id):
     """
     Fetch the role of a user by ID.
@@ -35,7 +32,6 @@ def get_user_role(user_id):
         result = cursor.fetchone()
         return result["role"] if result else None
 
-
 def is_authorized(user_id, allowed_roles):
     """
     Check if user_id has a role within allowed_roles (list).
@@ -43,7 +39,22 @@ def is_authorized(user_id, allowed_roles):
     role = get_user_role(user_id)
     return role in allowed_roles
 
-# manager login ( manager credintial)
+# Login functions for different roles
+
+def login_admin(username, password):
+    user = authenticate_user(username, password)
+    if user and user["role"] == "admin":
+        return user
+    return None
 
 def login_manager(username, password):
-    return authenticate_user(username, password)
+    user = authenticate_user(username, password)
+    if user and user["role"] == "manager":
+        return user
+    return None
+
+def login_staff(username, password):
+    user = authenticate_user(username, password)
+    if user and user["role"] == "staff":
+        return user
+    return None

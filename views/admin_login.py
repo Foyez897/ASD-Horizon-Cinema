@@ -1,5 +1,3 @@
-# views/admin_login.py
-
 import tkinter as tk
 from tkinter import messagebox
 from controllers.admin_controller import validate_admin_credentials
@@ -48,14 +46,16 @@ class AdminLoginView(tk.Toplevel):
             messagebox.showerror("Error", "Please fill in all fields.")
             return
 
-        if validate_admin_credentials(username, password):
-            messagebox.showinfo("Login Successful", "Welcome, Admin!")
+        user = validate_admin_credentials(username, password)
+        if user:
+            messagebox.showinfo("Login Successful", f"Welcome, {user['username']}!")
             self.destroy()  # Close the login window
-            # You can launch admin dashboard here
+
+            # ✅ Launch admin dashboard
             from views.admin_dashboard import AdminDashboard
             AdminDashboard(self.master)
         else:
-            messagebox.showerror("Login Failed", "Invalid username or password.")
+            messagebox.showerror("Login Failed", "Invalid admin credentials.")
 
     def logout(self):
         self.destroy()
