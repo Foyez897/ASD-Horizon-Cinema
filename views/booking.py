@@ -1,9 +1,9 @@
-# views/booking.py
-
 import tkinter as tk
+from views.refund import RefundView
 from tkinter import ttk, messagebox
 from controllers.booking_controller import get_all_cinemas
 from views.select_cinema import SelectShowtimeView
+
 
 class BookingView(tk.Toplevel):
     def __init__(self, parent, from_manager=False):
@@ -28,16 +28,21 @@ class BookingView(tk.Toplevel):
         tk.Button(nav, text="Logout", command=self.logout, bg="white").pack(side=tk.RIGHT, padx=10)
 
     def create_booking_portal(self):
-        tk.Label(self, text="🎟️ Staff Booking Portal", font=("Arial", 14, "bold"), bg="black").pack(pady=10)
+        tk.Label(self, text="🎟️ Staff Booking Portal", font=("Arial", 14, "bold"), bg="black", fg="white").pack(pady=10)
 
         cinemas = get_all_cinemas()
         cinema_names = [f"{c['city']} - {c['location']}" for c in cinemas]
 
-        ttk.Label(self, text="Select a cinema:", background="white").pack()
-        cinema_dropdown = ttk.Combobox(self, textvariable=self.cinema_var, values=cinema_names, state="readonly")
-        cinema_dropdown.pack(pady=10)
+        ttk.Label(self, text="Select a cinema:", background="white").pack(pady=(10, 5))
+        cinema_dropdown = ttk.Combobox(self, textvariable=self.cinema_var, values=cinema_names, state="readonly", width=50)
+        cinema_dropdown.pack(pady=5)
 
-        tk.Button(self, text="Continue", command=lambda: self.continue_to_showtimes(cinemas)).pack(pady=10)
+        tk.Button(self, text="🎬 Continue to Showtimes", command=lambda: self.continue_to_showtimes(cinemas),
+                  bg="green", fg="blue").pack(pady=15)
+
+        tk.Label(self, text="Need to process a refund?", bg="white").pack(pady=(20, 0))
+        tk.Button(self, text="🔁 Process Refund", bg="red", fg="darkblue",
+                  command=self.open_refund_window).pack(pady=5)
 
     def continue_to_showtimes(self, cinemas):
         selected = self.cinema_var.get()
@@ -52,6 +57,11 @@ class BookingView(tk.Toplevel):
                 SelectShowtimeView(self.master, cinema, cinema['id'])
                 return
 
+        messagebox.showerror("Error", "Selected cinema not found.")
+
     def logout(self):
         self.destroy()
         self.master.deiconify()
+
+    def open_refund_window(self):
+        RefundView(self)

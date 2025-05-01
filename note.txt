@@ -6,15 +6,14 @@ users = [
     ("staff1", "Staff!Pass789")
 ]
 
-### Manually Check Seat Availability in SQLite
+### Check Seat Availability in SQLite
 sqlite3 /Users/foyezahammed/Desktop/ASD/database/horizon_cinemas.db
 SELECT * FROM seats WHERE is_booked = 0;
 
 
 ### Test Booking & Cancellations
-PYTHONPATH=. python tests/test_booking.py
-PYTHONPATH=. python tests/test_cancellations.py
+python3 -m pytest tests/test_booking.py -v                 
+python3 -m pytest tests/test_cancellations.py -v 
+python3 -m pytest tests/test_cancellation_same_day.py -v
 
-## To unbook all seats (i.e., mark them as not booked), you can run the following SQL query:
-UPDATE seats
-SET is_booked = 0;
+#######  /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 main.py

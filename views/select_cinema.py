@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from datetime import datetime
 from controllers.showtime_controller import get_showtime_map_for_cinema
 from controllers.admin_controller import get_showtime_id_by_screen_time
@@ -52,7 +52,9 @@ class SelectShowtimeView(tk.Toplevel):
         for widget in self.table_frame.winfo_children():
             widget.destroy()
 
-        date = self.date_entry.get()
+        date = self.date_entry.get().strip()
+        self.selected_date = date  # ✅ Update current selected date
+
         showtime_map, screens, time_slots = get_showtime_map_for_cinema(self.cinema_id, date)
 
         tk.Label(self.table_frame, text="Screen", font=("Arial", 10, "bold"), bg="#343a40", fg="white", width=12).grid(row=0, column=0)
@@ -72,18 +74,18 @@ class SelectShowtimeView(tk.Toplevel):
                         width=15,
                         height=3,
                         bg="#f8f9fa",
-                        command=lambda s=screen, t=time: self.open_showtime_view(s, t)
+                        command=lambda s=screen, t=time, d=self.selected_date: self.open_showtime_view(s, t, d)
                     )
                 else:
                     btn = tk.Label(self.table_frame, text="N/A", width=15, height=3, bg="#e9ecef", fg="gray")
 
                 btn.grid(row=row_idx, column=col_idx, padx=1, pady=1)
 
-    def open_showtime_view(self, screen_number, time_slot):
-        result = get_showtime_id_by_screen_time(self.cinema_id, screen_number, time_slot)
+    def open_showtime_view(self, screen_number, time_slot, selected_date):
+        result = get_showtime_id_by_screen_time(self.cinema_id, screen_number, time_slot, selected_date)
         if result:
             showtime_id = result["showtime_id"]
             film_title = result["film_title"]
-            ViewShowtimeApp(self, showtime_id, screen_number, film_title, self.cinema_id)
+            ViewShowtimeApp(self, showtime_id, screen_number, film_title, self.cinema_id, user_id=3)
         else:
-            tk.messagebox.showerror("Error", f"No showtime found for Screen {screen_number} at {time_slot}")
+            messagebox.showerror("Error", f"No showtime found for Screen {screen_number} at {time_slot} on {selected_date}")

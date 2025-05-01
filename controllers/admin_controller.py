@@ -260,18 +260,13 @@ def delete_showtime(showtime_id):
     return True
 
 
-def get_showtime_id_by_screen_time(cinema_id, screen_number, time_slot):
+def get_showtime_id_by_screen_time(cinema_id, screen_number, time_slot, date):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT s.id AS showtime_id,
-                   f.title AS film_title,
-                   s.screen_number
-            FROM showtimes s
-            JOIN films f ON f.id = s.film_id
-            WHERE s.cinema_id = ?
-              AND s.screen_number = ?
-              AND strftime('%H:%M', s.show_time) = ?
-            LIMIT 1
-        """, (cinema_id, screen_number, time_slot))
+    SELECT s.id AS showtime_id, f.title AS film_title
+    FROM showtimes s
+    JOIN films f ON s.film_id = f.id
+    WHERE s.cinema_id = ? AND s.screen_number = ? AND time(s.show_time) = time(?) AND date(s.show_time) = date(?)
+""", (cinema_id, screen_number, time_slot, date))
         return cursor.fetchone()

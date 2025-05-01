@@ -1,18 +1,20 @@
 import tkinter as tk
 from tkinter import messagebox
 from database.database_setup import get_db_connection
-import sqlite3
-import random
-import datetime
-from views.receipt import show_receipt  # ✅ external receipt popup
+import uuid
+from datetime import datetime, timedelta
+from views.receipt import show_receipt
+from controllers.booking_controller import get_dynamic_price
+
 
 class ViewShowtimeApp:
-    def __init__(self, master, showtime_id, screen_number, film_title, cinema_id):
+    def __init__(self, master, showtime_id, screen_number, film_title, cinema_id, user_id=3):
         self.master = tk.Toplevel(master)
         self.showtime_id = showtime_id
         self.screen_number = screen_number
         self.film_title = film_title
         self.cinema_id = cinema_id
+        self.user_id = user_id
         self.selected_seats = set()
 
         self.master.title(f"Choose Seats - {film_title}")
@@ -29,7 +31,8 @@ class ViewShowtimeApp:
     def get_screen_id(self):
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id FROM screens WHERE cinema_id = ? AND screen_number = ?", (self.cinema_id, self.screen_number))
+            cursor.execute("SELECT id FROM screens WHERE cinema_id = ? AND screen_number = ?",
+                           (self.cinema_id, self.screen_number))
             row = cursor.fetchone()
             return row["id"] if row else None
 
@@ -84,7 +87,7 @@ class ViewShowtimeApp:
             """, (self.showtime_id, self.screen_id))
             seats = cursor.fetchall()
 
-        self.seat_buttons = {}  # seat_id: seat_number
+        self.seat_buttons = {}
         for idx, seat in enumerate(seats):
             seat_id = seat["id"]
             seat_num = seat["seat_number"]
@@ -116,7 +119,9 @@ class ViewShowtimeApp:
         return {
             "VIP": "plum",
             "gallery": "lightblue",
-            "hall": "lightgreen"
+            "upper gallery": "lightblue",
+            "hall": "lightgreen",
+            "lower hall": "lightgreen"
         }.get(seat_type.lower(), "white")
 
     def confirm_booking(self):
@@ -132,32 +137,72 @@ class ViewShowtimeApp:
             messagebox.showwarning("Missing Info", "Please fill in all customer details.")
             return
 
-        booking_reference = f"{random.randint(1000, 9999):x}{random.randint(1000, 9999):x}"[:8]
-        booking_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        total_price_per_seat = 8.064
-        booking_staff_id = 3
+        booking_reference = str(uuid.uuid4())[:8]
 
-        try:
-            conn = get_db_connection()
+        with get_db_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT show_time, cinema_id FROM showtimes WHERE id = ?", (self.showtime_id,))
+            show_time_str, cinema_id = cursor.fetchone()
 
-            for seat_id in self.selected_seats:
+            show_time_dt = datetime.strptime(show_time_str, "%Y-%m-%d %H:%M:%S")
+            now = datetime.now()
+
+            if show_time_dt > now + timedelta(days=7):
+                messagebox.showerror("Too far", "❌ Booking allowed only up to 7 days in advance.")
+                return
+
+            within_30 = 0 <= (show_time_dt - now).total_seconds() <= 1800
+
+            cursor.execute("SELECT city FROM cinemas WHERE id = ?", (cinema_id,))
+            city = cursor.fetchone()["city"]
+
+            cursor.execute("SELECT COUNT(*) FROM seats WHERE screen_id IN (SELECT id FROM screens WHERE cinema_id = ?)", (cinema_id,))
+            total_seats = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM bookings WHERE showtime_id = ?", (self.showtime_id,))
+            booked_seats = cursor.fetchone()[0]
+            occupancy = booked_seats / total_seats if total_seats else 1
+
+            last_minute = within_30 and occupancy < 0.7
+            family_discount = len(self.selected_seats) >= 4
+
+            discounts = []
+            if last_minute:
+                discounts.append("last_minute")
+            if family_discount:
+                discounts.append("family")
+
+            total_price = 0
+            for sid in self.selected_seats:
+                cursor.execute("SELECT seat_type FROM seats WHERE id = ?", (sid,))
+                seat_type = cursor.fetchone()["seat_type"]
+                price = get_dynamic_price(city, show_time_str, seat_type)
+
+                if last_minute:
+                    price *= 0.75
+                if family_discount:
+                    price *= 0.80
+
+                total_price += price
+
                 cursor.execute("""
-                    INSERT INTO bookings (customer_name, customer_email, customer_phone,
-                                          showtime_id, seat_id, booking_reference,
-                                          total_price, booking_staff_id, booking_date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (name, email, phone, self.showtime_id, seat_id, booking_reference,
-                      total_price_per_seat, booking_staff_id, booking_date))
+                    INSERT INTO bookings (
+                        customer_name, customer_email, customer_phone,
+                        showtime_id, seat_id, booking_reference,
+                        total_price, booking_staff_id, booking_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    name, email, phone,
+                    self.showtime_id, sid, booking_reference,
+                    round(price, 2), self.user_id,
+                    show_time_str
+                ))
+                cursor.execute("UPDATE seats SET is_booked = 1 WHERE id = ?", (sid,))
 
             conn.commit()
-            conn.close()
 
-            seat_numbers = [self.seat_buttons[sid] for sid in self.selected_seats]
-            show_receipt(name, email, phone, booking_reference, self.showtime_id,
-                         seat_numbers, total_price_per_seat * len(self.selected_seats))
+        seat_numbers = [self.seat_buttons[sid] for sid in self.selected_seats]
+        show_receipt(name, email, phone, booking_reference, self.showtime_id,
+                     seat_numbers, round(total_price, 2), discounts=discounts)
 
-            self.master.destroy()
-
-        except Exception as e:
-            messagebox.showerror("Booking Failed", f"Error: {e}")
+        self.master.destroy()

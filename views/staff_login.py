@@ -24,7 +24,7 @@ class StaffLoginView(tk.Toplevel):
         tk.Label(nav, text="🎬 Horizon Cinemas", fg="white", bg="black", font=("Arial", 16)).pack(side=tk.LEFT, padx=10, pady=10)
 
     def create_form(self):
-        tk.Label(self, text="🧾 Booking Staff Login", font=("Helvetica", 16), bg="black").pack(pady=15)
+        tk.Label(self, text="🧾 Booking Staff Login", font=("Helvetica", 16), bg="white").pack(pady=15)
 
         form = tk.Frame(self, bg="white")
         form.pack(pady=10)
@@ -35,7 +35,7 @@ class StaffLoginView(tk.Toplevel):
         tk.Label(form, text="Password", bg="white").grid(row=1, column=0, sticky="e", pady=5, padx=5)
         tk.Entry(form, textvariable=self.password_var, show="*", width=30).grid(row=1, column=1, pady=5)
 
-        tk.Button(self, text="Login", command=self.handle_login, bg="green", fg="white", width=20).pack(pady=15)
+        tk.Button(self, text="Login", command=self.handle_login, bg="white", fg="darkblue", width=20).pack(pady=15)
 
     def handle_login(self):
         username = self.username_var.get()

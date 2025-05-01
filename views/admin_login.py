@@ -22,7 +22,7 @@ class AdminLoginView(tk.Toplevel):
         tk.Button(nav, text="Logout", command=self.logout, bg="white").pack(side=tk.RIGHT, padx=10)
 
     def create_login_form(self):
-        tk.Label(self, text="🛠️ Admin Login", font=("Helvetica", 16), bg="white").pack(pady=20)
+        tk.Label(self, text="🛠️ Admin Login", font=("Helvetica", 16), bg="black").pack(pady=20)
 
         form_frame = tk.Frame(self, bg="white")
         form_frame.pack(padx=20)

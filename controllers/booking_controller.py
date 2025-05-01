@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from database.database_setup import get_db_connection
 
 
-#  Booking Staff Login
 
+#  Staff Login
 
 def login_staff(username, password):
     with get_db_connection() as conn:
@@ -14,15 +14,14 @@ def login_staff(username, password):
         cursor.execute("SELECT id, password FROM users WHERE LOWER(username) = LOWER(?)", (username,))
         user = cursor.fetchone()
 
-    if user and password == user["password"]:  # Replace this with secure hash check if needed
+    if user and password == user["password"]:  # Replace with hash check if needed
         return {"success": True, "user_id": user["id"]}
     else:
         return {"success": False, "message": "Invalid username or password"}
 
 
 
-#  Cinema & Film Data
-
+#  Fetch Cinemas and Films
 
 def fetch_cinemas():
     with get_db_connection() as conn:
@@ -45,54 +44,8 @@ def fetch_films_by_cinema(cinema_id):
         return cursor.fetchall()
 
 
-def get_showtime_seats(showtime_id):
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT s.id AS showtime_id, s.show_time, s.screen_number, s.cinema_id, f.title
-            FROM showtimes s
-            JOIN films f ON s.film_id = f.id
-            WHERE s.id = ?
-        """, (showtime_id,))
-        showtime = cursor.fetchone()
 
-        if not showtime:
-            return {"error": "Showtime not found"}
-
-        cursor.execute("SELECT city FROM cinemas WHERE id = ?", (showtime["cinema_id"],))
-        city = cursor.fetchone()["city"]
-
-        cursor.execute("""
-            SELECT id FROM screens
-            WHERE screen_number = ? AND cinema_id = ?
-        """, (showtime["screen_number"], showtime["cinema_id"]))
-        screen_id = cursor.fetchone()["id"]
-
-        cursor.execute("""
-            SELECT s.id, s.seat_number, s.seat_type,
-                   CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END AS is_booked
-            FROM seats s
-            LEFT JOIN bookings b ON s.id = b.seat_id AND b.showtime_id = ?
-            WHERE s.screen_id = ?
-            ORDER BY s.seat_number
-        """, (showtime_id, screen_id))
-        seats = cursor.fetchall()
-
-        seat_list = []
-        for seat in seats:
-            seat_dict = dict(seat)
-            seat_dict["price"] = get_dynamic_price(city, showtime["show_time"], seat_dict["seat_type"])
-            seat_list.append(seat_dict)
-
-        return {
-            "showtime": dict(showtime),
-            "seats": seat_list
-        }
-
-
-
-#  Price Calculation
-
+#  Dynamic Price Calculation
 
 def get_dynamic_price(city, show_time, seat_type):
     show_time_obj = datetime.strptime(show_time, "%Y-%m-%d %H:%M:%S")
@@ -118,8 +71,51 @@ def get_dynamic_price(city, show_time, seat_type):
 
 
 
-#  Booking Tickets
+#  Seat Availability for Showtime
 
+def get_showtime_seats(showtime_id):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.id AS showtime_id, s.show_time, s.screen_number, s.cinema_id, f.title
+            FROM showtimes s
+            JOIN films f ON s.film_id = f.id
+            WHERE s.id = ?
+        """, (showtime_id,))
+        showtime = cursor.fetchone()
+        if not showtime:
+            return {"error": "Showtime not found"}
+
+        cursor.execute("SELECT city FROM cinemas WHERE id = ?", (showtime["cinema_id"],))
+        city = cursor.fetchone()["city"]
+
+        cursor.execute("SELECT id FROM screens WHERE screen_number = ? AND cinema_id = ?", (showtime["screen_number"], showtime["cinema_id"]))
+        screen_id = cursor.fetchone()["id"]
+
+        cursor.execute("""
+            SELECT s.id, s.seat_number, s.seat_type,
+                   CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END AS is_booked
+            FROM seats s
+            LEFT JOIN bookings b ON s.id = b.seat_id AND b.showtime_id = ?
+            WHERE s.screen_id = ?
+            ORDER BY s.seat_number
+        """, (showtime_id, screen_id))
+        seats = cursor.fetchall()
+
+        seat_list = []
+        for seat in seats:
+            seat_dict = dict(seat)
+            seat_dict["price"] = get_dynamic_price(city, showtime["show_time"], seat_dict["seat_type"])
+            seat_list.append(seat_dict)
+
+        return {
+            "showtime": dict(showtime),
+            "seats": seat_list
+        }
+
+
+
+#  Booking Logic
 
 def book_tickets(user_id, showtime_id, name, email, phone, seat_ids):
     if isinstance(seat_ids, str):
@@ -140,9 +136,8 @@ def book_tickets(user_id, showtime_id, name, email, phone, seat_ids):
 
         show_time, cinema_id = data
         dt = datetime.strptime(show_time, "%Y-%m-%d %H:%M:%S")
-
         if dt > now + timedelta(days=7):
-            return {"error": "Booking allowed up to 7 days only"}
+            return {"error": "❌ Booking allowed only up to 7 days in advance."}
 
         within_30 = 0 <= (dt - now).total_seconds() <= 1800
 
@@ -162,7 +157,7 @@ def book_tickets(user_id, showtime_id, name, email, phone, seat_ids):
         for sid in seat_ids:
             cursor.execute("SELECT seat_type FROM seats WHERE id = ?", (sid,))
             row = cursor.fetchone()
-            seat_type = row["seat_type"] if row else "Lower Hall"
+            seat_type = row["seat_type"] if row else "lower hall"
             price = get_dynamic_price(city, show_time, seat_type)
 
             if last_minute:
@@ -177,13 +172,13 @@ def book_tickets(user_id, showtime_id, name, email, phone, seat_ids):
             total_price += price
 
             cursor.execute("""
-                INSERT INTO bookings (
-                    customer_name, customer_email, customer_phone,
-                    showtime_id, seat_id, booking_reference, total_price,
-                    booking_staff_id, booking_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (name, email, phone, showtime_id, sid, booking_reference,
-                  price, user_id, now.strftime("%Y-%m-%d %H:%M:%S")))
+    INSERT INTO bookings (
+        customer_name, customer_email, customer_phone,
+        showtime_id, seat_id, booking_reference, total_price,
+        booking_staff_id, booking_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+""", (name, email, phone, showtime_id, sid, booking_reference,
+      price, user_id, show_time))
             cursor.execute("UPDATE seats SET is_booked = 1 WHERE id = ?", (sid,))
 
         conn.commit()
@@ -194,52 +189,86 @@ def book_tickets(user_id, showtime_id, name, email, phone, seat_ids):
         "discounts": discounts
     }
 
-# get all cinemas
 
 
-def get_all_cinemas():
-    return fetch_cinemas()
-
-
-# REFUND
+#  Booking Lookup by Ref or Email
 
 def get_booking_by_ref_or_email(ref_or_email):
     with get_db_connection() as conn:
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+
         cursor.execute("""
-            SELECT b.*, s.show_time
+            SELECT 
+                b.booking_reference, b.customer_name, b.customer_email,
+                b.customer_phone, b.total_price, b.booking_date,
+                b.id AS booking_id, s.show_time, f.title AS film_title, se.seat_number
             FROM bookings b
             JOIN showtimes s ON b.showtime_id = s.id
+            JOIN films f ON s.film_id = f.id
+            JOIN seats se ON b.seat_id = se.id
             WHERE b.booking_reference = ? OR b.customer_email = ?
         """, (ref_or_email, ref_or_email))
-        return cursor.fetchall()
 
-def process_refund(booking_id):
-    with get_db_connection() as conn:
+        rows = cursor.fetchall()
+        if not rows:
+            return None
+
+        return {
+            "booking_id": rows[0]["booking_id"],
+            "booking_reference": rows[0]["booking_reference"],
+            "customer_name": rows[0]["customer_name"],
+            "customer_email": rows[0]["customer_email"],
+            "customer_phone": rows[0]["customer_phone"],
+            "total_price": sum(row["total_price"] for row in rows),
+            "booking_date": rows[0]["booking_date"],
+            "show_time": rows[0]["show_time"],
+            "film_title": rows[0]["film_title"],
+            "seat_numbers": [str(row["seat_number"]) for row in rows]
+        }
+
+
+
+#  Process Refund
+
+def process_refund(booking_id, testing=False):  # ← add testing param
+    with get_db_connection(testing=testing) as conn:  # ← pass it
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT showtime_id, total_price, booking_date FROM bookings WHERE id = ?", (booking_id,))
-        booking = cursor.fetchone()
 
-        if not booking:
-            return {"success": False, "message": "Booking not found"}
+        cursor.execute("SELECT booking_reference FROM bookings WHERE id = ?", (booking_id,))
+        row = cursor.fetchone()
+        if not row:
+            return {"success": False, "message": "Booking not found."}
+        booking_ref = row["booking_reference"]
 
-        showtime_id = booking["showtime_id"]
-        total_price = booking["total_price"]
-        booking_date = booking["booking_date"]
-
-        from datetime import datetime, timedelta
-        showtime_date = datetime.strptime(booking_date, "%Y-%m-%d %H:%M:%S")
-        now = datetime.now()
-
-        if showtime_date.date() <= now.date():
-            return {"success": False, "message": "Cancellation not allowed on the day of show"}
-
-        refund = round(total_price * 0.5, 2)
-        cursor.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
         cursor.execute("""
-            INSERT INTO cancellations (booking_id, cancellation_date, refund_amount)
-            VALUES (?, ?, ?)
-        """, (booking_id, now.strftime("%Y-%m-%d %H:%M:%S"), refund))
-        conn.commit()
+            SELECT b.id, b.total_price, s.show_time
+            FROM bookings b
+            JOIN showtimes s ON b.showtime_id = s.id
+            WHERE b.booking_reference = ?
+        """, (booking_ref,))
+        bookings = cursor.fetchall()
 
-        return {"success": True, "refund": refund}
+        now = datetime.now()
+        for booking in bookings:
+            show_dt = datetime.strptime(booking["show_time"], "%Y-%m-%d %H:%M:%S")
+            if show_dt.date() <= now.date():
+                return {"success": False, "message": "❌ Refund not allowed on the day of the show."}
+
+        total_refund = 0.0
+        for booking in bookings:
+            refund = round(booking["total_price"] * 0.5, 2)
+            total_refund += refund
+            cursor.execute("DELETE FROM bookings WHERE id = ?", (booking["id"],))
+            cursor.execute("""
+                INSERT INTO cancellations (booking_id, cancellation_date, refund_amount)
+                VALUES (?, ?, ?)
+            """, (booking["id"], now.strftime("%Y-%m-%d %H:%M:%S"), refund))
+
+        conn.commit()
+        return {"success": True, "refund": round(total_refund, 2)}
+    
+    # Get all cinemas (used by BookingView)
+def get_all_cinemas():
+    return fetch_cinemas()

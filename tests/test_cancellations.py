@@ -1,55 +1,100 @@
-import re
-import sys
+import pytest
 import os
+import sqlite3
 from datetime import datetime, timedelta
+from controllers.booking_controller import process_refund
+from database.database_setup import get_db_connection
 
-# Ensure the project root is in the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from controllers.booking_controller import cancel_booking
-from utils.db_connection import execute_query
+TEST_DB_PATH = "database/horizon_cinemas_test.db"
 
-# 🔹 Helper function to check if booking reference exists
-def booking_exists(booking_reference):
-    query = "SELECT COUNT(*) FROM bookings WHERE booking_reference = ?"
-    result = execute_query(query, (booking_reference,), fetch_one=True)
-    return result[0] > 0
 
-# 🔹 Test Cancellation Logic
-def test_cancellation():
-    print("\n🔷 Testing Booking Cancellation...")
+def setup_test_db():
+    if os.path.exists(TEST_DB_PATH):
+        os.remove(TEST_DB_PATH)
 
-    # 🔹 Manually enter the booking reference
-    booking_reference = input("Enter the booking reference number to cancel: ").strip()
+    with get_db_connection(testing=True) as conn:
+        cursor = conn.cursor()
 
-    # 🔹 Ensure the booking reference exists in the database
-    if not booking_exists(booking_reference):
-        print("❌ Booking reference not found in the database.")
-        return
+        # Create necessary tables
+        cursor.executescript("""
+            CREATE TABLE bookings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_name TEXT,
+                customer_email TEXT,
+                customer_phone TEXT,
+                showtime_id INTEGER,
+                seat_id INTEGER,
+                booking_reference TEXT,
+                total_price REAL,
+                booking_staff_id INTEGER,
+                booking_date TEXT
+            );
 
-    print(f"🔹 Using Booking Reference: {booking_reference}")
+            CREATE TABLE showtimes (
+                id INTEGER PRIMARY KEY,
+                show_time TEXT,
+                cinema_id INTEGER,
+                screen_number INTEGER,
+                film_id INTEGER
+            );
 
-    # 🔹 Check the booking date
-    query = """
-    SELECT showtimes.show_time 
-    FROM bookings
-    JOIN showtimes ON bookings.showtime_id = showtimes.id
-    WHERE booking_reference = ?;
-    """
-    booking_time = execute_query(query, (booking_reference,), fetch_one=True)[0]
+            CREATE TABLE cancellations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                booking_id INTEGER,
+                cancellation_date TEXT,
+                refund_amount REAL
+            );
 
-    # Convert the showtime string to a datetime object
-    show_time = datetime.strptime(booking_time, "%Y-%m-%d %H:%M:%S")
+            CREATE TABLE cinemas (
+                id INTEGER PRIMARY KEY,
+                city TEXT,
+                location TEXT
+            );
 
-    # If the showtime is less than a day away, cancellation shouldn't be allowed
-    if (show_time - datetime.now()).days < 1:
-        print("❌ Cannot cancel on the day of the show. No refund!")
-        return
+            CREATE TABLE screens (
+                id INTEGER PRIMARY KEY,
+                cinema_id INTEGER,
+                screen_number INTEGER
+            );
 
-    # 🔹 Attempt to cancel booking
-    cancel_result = cancel_booking(booking_reference)
-    print(cancel_result)
+            CREATE TABLE seats (
+                id INTEGER PRIMARY KEY,
+                screen_id INTEGER,
+                seat_number TEXT,
+                seat_type TEXT
+            );
+        """)
 
-# Run the cancellation test
-if __name__ == "__main__":
-    test_cancellation()
+        # Insert test cinema, screen, showtime, seat, booking
+        now = datetime.now()
+        future_showtime = (now + timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
+
+        cursor.execute("INSERT INTO cinemas (id, city, location) VALUES (1, 'London', 'Central')")
+        cursor.execute("INSERT INTO screens (id, cinema_id, screen_number) VALUES (1, 1, 1)")
+        cursor.execute("INSERT INTO seats (id, screen_id, seat_number, seat_type) VALUES (1, 1, 'A1', 'Lower Hall')")
+        cursor.execute("INSERT INTO showtimes (id, show_time, cinema_id, screen_number, film_id) VALUES (1, ?, 1, 1, 1)", (future_showtime,))
+        cursor.execute("""
+            INSERT INTO bookings (
+                id, customer_name, customer_email, customer_phone,
+                showtime_id, seat_id, booking_reference,
+                total_price, booking_staff_id, booking_date
+            ) VALUES (
+                1, 'Test User', 'test@example.com', '1234567890',
+                1, 1, 'TESTREF',
+                10.00, 1, ?
+            )
+        """, (future_showtime,))
+
+        conn.commit()
+
+
+@pytest.fixture(autouse=True)
+def run_setup():
+    setup_test_db()
+
+
+def test_successful_refund():
+    result = process_refund(1, testing=True)  # ✅ now uses test DB
+    assert result["success"] is True
+    assert result["refund"] == 5.00  # 50% of £10
